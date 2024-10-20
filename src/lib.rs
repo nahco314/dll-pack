@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn two() {
         let mut result = load_with_platform(
-            &Url::from_str("https://github.com/nahco314/dll-pack-sample-adder/releases/download/v0.3.0/dll-pack-sample-adder.dllpack").unwrap(),
+            &Url::from_str("https://github.com/nahco314/dll-pack-sample-adder/releases/download/v0.1.0/dll-pack-sample-adder.dllpack").unwrap(),
             &PathBuf::from_str("/home/nahco314/RustroverProjects/dll-pack/work").unwrap(),
             "x86_64-unknown-linux-gnu",
         )

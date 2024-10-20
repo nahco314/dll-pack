@@ -47,7 +47,11 @@ pub fn download_lib(dll_info: &DllInfo) -> Result<()> {
     let res = reqwest::blocking::get(dll_info.url.as_str())?;
 
     if !res.status().is_success() {
-        return Err(anyhow!("Failed to download: {}", res.status()));
+        return Err(anyhow!(
+            "Failed to download {}: {}",
+            dll_info.url,
+            res.status()
+        ));
     }
 
     DirBuilder::new()
@@ -97,7 +101,11 @@ pub fn download_manifest(manifest_info: &ManifestInfo) -> Result<()> {
     let res = reqwest::blocking::get(manifest_info.url.as_str())?;
 
     if !res.status().is_success() {
-        return Err(anyhow!("Failed to download: {}", res.status()));
+        return Err(anyhow!(
+            "Failed to download {}: {}",
+            manifest_info.url,
+            res.status()
+        ));
     }
 
     DirBuilder::new()

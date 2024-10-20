@@ -3,6 +3,7 @@ use crate::dllpack_file::{DllPackFile, PlatformManifest};
 use crate::download::{cached_download_lib, cached_download_manifest, DllInfo, ManifestInfo};
 use anyhow::{Result};
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::path::PathBuf;
 use url::Url;
 
@@ -14,6 +15,16 @@ pub enum ResolveError {
 impl Into<anyhow::Error> for ResolveError {
     fn into(self) -> anyhow::Error {
         anyhow::anyhow!(self)
+    }
+}
+
+impl Display for ResolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolveError::PlatformNotSupported(platform) => {
+                write!(f, "Platform {} is not supported", platform)
+            }
+        }
     }
 }
 

@@ -1,8 +1,11 @@
 use crate::download::DllInfo;
-use crate::resolve::resolve;
+use crate::resolve::{resolve, ResolveError};
 use crate::type_utils::{Caller, IOToFn};
 use anyhow::{anyhow, Result};
-use libloading::os::unix::{Library as LLLibrary, Symbol, RTLD_LAZY, RTLD_LOCAL, RTLD_NOW};
+#[cfg(unix)]
+use libloading::os::unix::{Library as LLLibrary, Symbol, RTLD_LOCAL, RTLD_NOW};
+#[cfg(windows)]
+use libloading::os::windows::{Library as LLLibrary, Symbol};
 use log::{debug, info, trace};
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -152,6 +155,16 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
     Ok(Library::WasmLibrary(instance, store))
 }
 
+#[cfg(unix)]
+unsafe fn libloading_load(path: &PathBuf) -> Result<LLLibrary> {
+    LLLibrary::open(Some(path), RTLD_NOW | RTLD_LOCAL).map_err(|e| e.into())
+}
+
+#[cfg(windows)]
+unsafe fn libloading_load(path: &PathBuf) -> Result<LLLibrary> {
+    LLLibrary::new(path).map_err(|e| e.into())
+}
+
 pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<Library> {
     if is_wasm(platform) {
         return load_with_wasm(url, work_dir, platform);
@@ -164,14 +177,32 @@ pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Resu
 
     for d in dependency_load_order_paths {
         trace!("loading dependency: {}", d.url);
-        let lib = unsafe { LLLibrary::open(Some(d.path), RTLD_NOW | RTLD_LOCAL)? };
+        let lib = unsafe { libloading_load(&d.path)? };
         dependency_libs.push(lib);
     }
 
     trace!("loading base library: {}", base_info.url);
-    let lib = unsafe { LLLibrary::open(Some(base_info.path), RTLD_NOW | RTLD_LOCAL)? };
+    let lib = unsafe { libloading_load(&base_info.path)? };
 
     Ok(Library::LLLibrary(lib, dependency_libs))
+}
+
+pub fn load(url: &Url, work_dir: &PathBuf) -> Result<Library> {
+    let this_platform = env!("TARGET_TRIPLE");
+    let with_this_platform = load_with_platform(url, work_dir, this_platform);
+
+    match with_this_platform {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            if let Some(m) = e.downcast_ref::<ResolveError>() {
+                debug!("Failed to load with this platform: {}", m);
+
+                load_with_wasm(url, work_dir, "wasm32-wasip1")
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -189,6 +220,21 @@ mod tests {
         .unwrap();
 
         let a = result.get_function::<(i32, i32), (i32)>("adding").unwrap();
+        let res = a.call(&mut result, (2, 3));
+
+        println!("{}", res);
+    }
+
+    #[test]
+    fn two() {
+        let mut result = load_with_platform(
+            &Url::from_str("https://github.com/nahco314/dll-pack-sample-adder/releases/download/v0.3.0/dll-pack-sample-adder.dllpack").unwrap(),
+            &PathBuf::from_str("/home/nahco314/RustroverProjects/dll-pack/work").unwrap(),
+            "x86_64-unknown-linux-gnu",
+        )
+            .unwrap();
+
+        let a = result.get_function::<(i32, i32), (i32)>("adding_and_one").unwrap();
         let res = a.call(&mut result, (2, 3));
 
         println!("{}", res);

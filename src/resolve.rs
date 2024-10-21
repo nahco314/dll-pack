@@ -1,21 +1,16 @@
 use crate::dependency::Dependency;
 use crate::dllpack_file::{DllPackFile, PlatformManifest};
 use crate::download::{cached_download_lib, cached_download_manifest, DllInfo, ManifestInfo};
-use anyhow::{Result};
+use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
+use log::trace;
 use url::Url;
 
 #[derive(Debug)]
 pub enum ResolveError {
     PlatformNotSupported(String),
-}
-
-impl Into<anyhow::Error> for ResolveError {
-    fn into(self) -> anyhow::Error {
-        anyhow::anyhow!(self)
-    }
 }
 
 impl Display for ResolveError {
@@ -42,7 +37,7 @@ fn fetch_manifests_inner(
     let manifest = file.manifest;
 
     let Some(p_manifest) = manifest.platforms.get(platform) else {
-        return Err(anyhow::anyhow!(ResolveError::PlatformNotSupported(
+        return Err(anyhow!(ResolveError::PlatformNotSupported(
             platform.to_string()
         )));
     };
@@ -158,7 +153,7 @@ pub fn resolve(
     }
 
     if unresolved_count > 0 {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to resolve all dependencies for {}. It may be a circular dependency.",
             platform
         ));

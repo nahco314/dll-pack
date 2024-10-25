@@ -7,10 +7,8 @@ This toolchain has been built for the tool called “foro”, and documents, lic
 ## platforms
 
 - linux: fully supported
-- macos: You can use WASM module, native is WIP
-  - loading logic may work with the same one as linux.
-  - in building tools (dll-pack-builder and GitHub Actions), we can't use `ldd`.
-    - so I think we should use `otool -L`, but there is no Python-wrapping (sad)
+- macos: supported
+  - Basically functional, but with some inadequate features
 - Windows: You can use WASM module, native is WIP
   - loading logic may work with some modification.
   - building tools need to be created.

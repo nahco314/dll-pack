@@ -113,7 +113,7 @@ macro_rules! impl_caller {
         impl<$($args,)* Res> Caller<($($args,)*), Res> for ($($args,)*)
         {
             fn call(($($args,)*): ($($args,)*), func: &unsafe extern "C" fn($($args),*) -> Res) -> Res {
-                // safety: the function pointer must be valid and follow the correct ABI
+                // Safety: The function pointer must be valid and follow the correct ABI.
                 unsafe { func($($args),*) }
             }
         }

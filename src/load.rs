@@ -128,14 +128,14 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
 
     let (base_info, dependency_load_order_paths) = resolve(url, work_dir, platform)?;
 
-    // basic wasm file cannot include dependencies
-    // note: wasm component can include dependencies maybe
+    // Basic wasm file cannot include dependencies.
+    // Note: Wasm component can include dependencies maybe.
     if !dependency_load_order_paths.is_empty() {
         return Err(anyhow!("Wasm file cannot include dependencies"));
     }
 
     let mut config = Config::default();
-    // see https://github.com/bytecodealliance/wasmtime/issues/8897
+    // See https://github.com/bytecodealliance/wasmtime/issues/8897
     #[cfg(unix)]
     config.native_unwind_info(false);
 
@@ -143,7 +143,7 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
 
     let cache_path = base_info.wasm_module_cache_path();
 
-    // use cached module if available
+    // Use cached module if available.
     let module = if cache_path.exists() {
         debug!(
             "{}: loading from cache: {}",
@@ -179,7 +179,14 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
 
     let mut linker = Linker::new(&engine);
 
-    // set up wasi environment with full system access
+    // Set up wasi environment with full system access.
+    //
+    // One possible way to ensure security would be
+    // to limit the host-side permissions accessible from the WASI environment.
+    // However, since dllpack can load native libraries,
+    // such restrictions would not be very meaningful in practice.
+    //
+    // Therefore, we do not plan to offer such an option.
     preview1::add_to_linker_sync(&mut linker, |t| t)?;
     let pre = linker.instantiate_pre(&module)?;
 
@@ -217,7 +224,7 @@ pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Resu
     let (base_info, dependency_load_order_paths) = resolve(url, work_dir, platform)?;
     let mut dependency_libs = Vec::new();
 
-    // load dependencies in order before the main library
+    // Load dependencies in order before the main library.
     for d in dependency_load_order_paths {
         trace!("loading dependency: {}", d.url);
         let lib = unsafe { libloading_load(&d.path)? };

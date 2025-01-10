@@ -12,6 +12,7 @@ use url::Url;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{preview1, DirPerms, FilePerms, WasiCtxBuilder};
 
+/// Represents a unique source of a library, identified by its URL and platform.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct Source {
     url: Url,
@@ -21,6 +22,8 @@ struct Source {
 static CACHE: LazyLock<Mutex<HashMap<Source, Library>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Attempts to load a library from the cache or loads it anew if not present.
+/// Executes a provided function with the library.
 pub fn run_cached_load_with_platform<T>(
     url: &Url,
     work_dir: &PathBuf,
@@ -51,6 +54,8 @@ pub fn run_cached_load_with_platform<T>(
     res
 }
 
+/// Tries to load a library using the current platform, and if it fails due to a `ResolveError`,
+/// attempts to load it using a fallback platform.
 fn run_cached_load_impl<T>(
     url: &Url,
     work_dir: &PathBuf,
@@ -73,6 +78,8 @@ fn run_cached_load_impl<T>(
     }
 }
 
+/// A public function that wraps `run_cached_load_impl`, providing a simpler interface
+/// for loading libraries with caching.
 pub fn run_cached_load<T>(
     url: &Url,
     work_dir: &PathBuf,

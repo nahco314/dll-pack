@@ -1,7 +1,12 @@
 use crate::resolve::{resolve, ResolveError};
 use crate::type_utils::{Caller, IOToFn};
 use anyhow::{anyhow, Result};
-use libloading::os::unix::{Library as LLNativeLibrary, Symbol, RTLD_LOCAL, RTLD_NOW};
+use libloading::os::unix::{
+    Library as LLNativeLibrary, // LL means libloading
+    Symbol,
+    RTLD_LOCAL,
+    RTLD_NOW,
+};
 use log::{debug, trace};
 use std::fs;
 use std::ops::Deref;
@@ -11,6 +16,11 @@ use wasmtime::{Config, Engine, Instance as WasmInstance, Linker, Module, Store, 
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{preview1, DirPerms, FilePerms, WasiCtxBuilder};
 
+/// It represents a callable function loaded from a library,
+/// abstracting both native and WASM libraries.
+///
+/// The type parameters `Args` and `Res` define the function signature,
+/// and `IOToFn` provides the conversion logic.
 pub enum Function<Args, Res>
 where
     (Args, Res): IOToFn,
@@ -26,6 +36,7 @@ where
     (Args, Res): IOToFn,
     Args: Caller<Args, Res>,
 {
+    /// Dispatches function calls to either native or wasm implementations based on the variant.
     pub fn call(&self, library: &mut Library, args: Args) -> Res {
         match &self {
             Function::LLFunction(symbol) => unsafe {
@@ -42,16 +53,23 @@ where
     }
 }
 
+/// A struct that stores OS-native DLLs.
+/// The actual handling of DLLs is done using libloading.
+///
+/// By owning not only the library itself but also its dependencies,
+/// it prevents the library and its dependent parts from being unloaded prematurely.
 pub struct NativeLibrary {
     pub raw_library: LLNativeLibrary,
     pub raw_dependencies: Vec<LLNativeLibrary>,
 }
 
+/// A struct that encapsulates a wasmtime instance and a context for WASI operations.
 pub struct WasmLibrary {
     pub instance: WasmInstance,
     pub store: Store<WasiP1Ctx>,
 }
 
+/// An interface that abstracts both native libraries and WASM libraries.
 pub enum Library {
     NativeLibrary(NativeLibrary),
     WasmLibrary(WasmLibrary),
@@ -72,6 +90,7 @@ impl Library {
         Library::WasmLibrary(WasmLibrary { instance, store })
     }
 
+    /// Retrieves a function from the library with type-safe bindings.
     pub fn get_function<Args, Res>(&mut self, name: &str) -> Result<Function<Args, Res>>
     where
         Args: wasmtime::WasmParams,
@@ -103,25 +122,28 @@ fn is_wasi(platform: &str) -> bool {
     platform.contains("wasi")
 }
 
+/// Loads a wasm library with WASI support, including module caching for performance.
 pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<Library> {
     debug!("toplevel-load with {}: {}", platform, url);
 
     let (base_info, dependency_load_order_paths) = resolve(url, work_dir, platform)?;
 
     // basic wasm file cannot include dependencies
-    // note : wasm component can include dependencies maybe
+    // note: wasm component can include dependencies maybe
     if !dependency_load_order_paths.is_empty() {
         return Err(anyhow!("Wasm file cannot include dependencies"));
     }
 
     let mut config = Config::default();
-    // https://github.com/bytecodealliance/wasmtime/issues/8897
+    // see https://github.com/bytecodealliance/wasmtime/issues/8897
     #[cfg(unix)]
     config.native_unwind_info(false);
+
     let engine = Engine::new(&config)?;
 
     let cache_path = base_info.wasm_module_cache_path();
 
+    // use cached module if available
     let module = if cache_path.exists() {
         debug!(
             "{}: loading from cache: {}",
@@ -157,6 +179,7 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
 
     let mut linker = Linker::new(&engine);
 
+    // set up wasi environment with full system access
     preview1::add_to_linker_sync(&mut linker, |t| t)?;
     let pre = linker.instantiate_pre(&module)?;
 
@@ -182,6 +205,8 @@ unsafe fn libloading_load(path: &PathBuf) -> Result<LLNativeLibrary> {
     LLNativeLibrary::new(path).map_err(|e| e.into())
 }
 
+/// Downloads the dllpack from the specified URL and loads it for the specified platform.
+/// Both the download and loading processes are cached.
 pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<Library> {
     if is_wasm(platform) {
         return load_with_wasm(url, work_dir, platform);
@@ -192,6 +217,7 @@ pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Resu
     let (base_info, dependency_load_order_paths) = resolve(url, work_dir, platform)?;
     let mut dependency_libs = Vec::new();
 
+    // load dependencies in order before the main library
     for d in dependency_load_order_paths {
         trace!("loading dependency: {}", d.url);
         let lib = unsafe { libloading_load(&d.path)? };
@@ -204,6 +230,9 @@ pub fn load_with_platform(url: &Url, work_dir: &PathBuf, platform: &str) -> Resu
     Ok(Library::new_native_library(lib, dependency_libs))
 }
 
+/// The entry point for library loading that first attempts native loading
+/// and falls back to WASM if necessary.
+/// This provides transparent cross-platform support with WASM as a fallback.
 pub fn load(url: &Url, work_dir: &PathBuf) -> Result<Library> {
     let this_platform = env!("TARGET_TRIPLE");
     let with_this_platform = load_with_platform(url, work_dir, this_platform);

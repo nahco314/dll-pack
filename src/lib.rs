@@ -1,3 +1,12 @@
+//! dll-pack is a library for packaging, distributing, and loading dynamic libraries (DLLs/shared objects)
+//! with their dependencies. It provides functionality for:
+//!
+//! - Loading dynamic libraries from .dllpack files
+//! - Managing library dependencies
+//! - Caching loaded libraries for performance
+//! - Cross-platform support including WASM
+//! - Safe function calling interfaces
+
 use crate::type_utils::{Caller, IOToFn};
 #[cfg(windows)]
 use libloading::os::windows::{Library as LLLibrary, Symbol};
@@ -5,14 +14,16 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use url::Url;
 use wasmtime::IntoFunc;
-pub mod dependency;
-pub mod dllpack_file;
-mod download;
-pub mod load;
-pub mod process_cache;
-pub mod resolve;
-mod type_utils;
+// Public modules that comprise the main API
+pub mod dependency; // Dependency management and resolution
+pub mod dllpack_file; // DLLPack file format handling
+mod download; // Internal module for downloading libraries
+pub mod load; // Core library loading functionality
+pub mod process_cache; // Process-level caching of loaded libraries
+pub mod resolve; // Dependency resolution logic
+mod type_utils; // Internal type utilities and helpers
 
+// Re-export commonly used types and functions for convenience
 pub use load::{load, load_with_platform, load_with_wasm, Function, Library};
 pub use process_cache::{run_cached_load, run_cached_load_with_platform};
 

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use url::Url;
 use urlencoding;
 
+/// Metadata about the source of the raw DLL (.so, .dll) and where it will be downloaded.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct DllInfo {
     pub url: Url,
@@ -76,6 +77,7 @@ pub fn cached_download_lib(dll_info: &DllInfo) -> Result<()> {
     download_lib(dll_info)
 }
 
+/// Metadata about the source of the manifest (.dllpack) and where it will be downloaded.
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ManifestInfo {
     pub url: Url,

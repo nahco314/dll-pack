@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use log::trace;
 use url::Url;
 
-#[derive(Debug)]
 pub enum ResolveError {
     PlatformNotSupported(String),
 }
@@ -23,6 +22,7 @@ impl Display for ResolveError {
     }
 }
 
+/// Implementation of the DFS process for `fetch_manifests`.
 fn fetch_manifests_inner(
     base_info: &ManifestInfo,
     work_dir: &PathBuf,
@@ -77,6 +77,8 @@ fn fetch_manifests_inner(
     Ok(())
 }
 
+/// Recursively downloads and processes manifests using DFS, building a map of dependencies
+/// and reverse dependencies.
 fn fetch_manifests(
     base_url: &Url,
     work_dir: &PathBuf,
@@ -110,6 +112,9 @@ fn fetch_manifests(
     ))
 }
 
+/// Resolves dependencies, ensuring all necessary libraries are downloaded
+/// and available in the correct order.
+/// Return value is a tuple of the main library and a vector of dependencies.
 pub fn resolve(
     base_url: &Url,
     work_dir: &PathBuf,

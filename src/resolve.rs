@@ -5,7 +5,6 @@ use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
-use log::trace;
 use url::Url;
 
 #[derive(Debug)]

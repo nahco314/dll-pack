@@ -19,19 +19,21 @@ pub mod dependency; // Dependency management and resolution
 pub mod dllpack_file; // DLLPack file format handling
 mod download; // Internal module for downloading libraries
 pub mod load; // Core library loading functionality
-pub mod process_cache; // Process-level caching of loaded libraries
+pub mod process_cache_multi; // Multiprocess caching of loaded libraries
+pub mod process_cache_single; // Process-level caching of loaded libraries
 pub mod resolve; // Dependency resolution logic
-mod type_utils; // Internal type utilities and helpers
+mod type_utils;
+// Internal type utilities and helpers
 
 // Re-export commonly used types and functions for convenience
 pub use load::{load, load_with_platform, load_with_wasm, Function, Library};
-pub use process_cache::{run_cached_load, run_cached_load_with_platform};
+pub use process_cache_multi::{run_multi_cached, run_multi_cached_with_platform};
+pub use process_cache_single::{run_single_cached, run_single_cached_with_platform};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::load::{load_with_platform, Library};
-    use crate::process_cache::run_cached_load_with_platform;
     use anyhow::Result;
     use std::str::FromStr;
 
@@ -53,7 +55,7 @@ mod tests {
     #[test]
     fn two() {
         let start_time = std::time::Instant::now();
-        run_cached_load_with_platform(
+        run_single_cached_with_platform(
             &Url::from_str("https://github.com/nahco314/dll-pack-sample-adder/releases/download/v0.1.0/dll-pack-sample-adder.dllpack").unwrap(),
             &PathBuf::from_str("/home/nahco314/RustroverProjects/dll-pack/work").unwrap(),
             "x86_64-unknown-linux-gnu",
@@ -70,7 +72,7 @@ mod tests {
 
         println!("Elapsed: {:?}", start_time.elapsed());
 
-        run_cached_load_with_platform(
+        run_single_cached_with_platform(
             &Url::from_str("https://github.com/nahco314/dll-pack-sample-adder/releases/download/v0.1.0/dll-pack-sample-adder.dllpack").unwrap(),
             &PathBuf::from_str("/home/nahco314/RustroverProjects/dll-pack/work").unwrap(),
             "x86_64-unknown-linux-gnu",

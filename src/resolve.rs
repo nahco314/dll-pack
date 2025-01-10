@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use log::trace;
 use url::Url;
 
+#[derive(Debug)]
 pub enum ResolveError {
     PlatformNotSupported(String),
 }

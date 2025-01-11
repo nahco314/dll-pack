@@ -2,7 +2,8 @@ use crate::dependency::Dependency;
 use crate::dllpack_file::{DllPackFile, PlatformManifest};
 use crate::download::{cached_download_lib, cached_download_manifest, DllInfo, ManifestInfo};
 use anyhow::{anyhow, Result};
-use std::collections::BTreeMap;
+use log::debug;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Display;
 use std::path::PathBuf;
 use url::Url;
@@ -187,6 +188,99 @@ pub fn resolve(
     cached_download_lib(&dll_info)?;
 
     Ok((dll_info, dependency_load_order_paths))
+}
+
+/// Holds the location of the main dllpack manifest, and all cached dependencies found.
+/// This is analogous to (PathBuf, Vec<(String, PathBuf)>).
+#[derive(Debug)]
+pub struct CachedDependencyResult {
+    /// The path to the top-level dllpack manifest in the local cache.
+    pub manifest_path: PathBuf,
+    /// A list of dependencies found, each paired with their cached path (if present).
+    pub dependencies: Vec<(String, PathBuf)>,
+}
+
+/// Gathers all locally cached dependencies (DllPacks and Dlls) for **all platforms**
+/// of the given dllpack, without triggering any downloads.
+/// If the main dllpack is not cached locally, it returns `Ok(None)`.
+///
+/// # Returns
+/// * `Ok(Some(CachedDependencyResult))` if the top-level manifest is found and parsed successfully,
+///   and any dependencies that are also cached are collected.
+/// * `Ok(None)` if the top-level dllpack manifest is not found in the local cache.
+/// * `Err(...)` if some I/O or parsing error occurs.
+pub fn get_all_cached_dependencies(
+    dllpack_url: &Url,
+    work_dir: &PathBuf,
+) -> Result<Option<CachedDependencyResult>> {
+    // Build a ManifestInfo for the top-level URL
+    let base_info = ManifestInfo::from_input(dllpack_url, work_dir)?;
+
+    // If the main manifest file doesn't exist locally, we can't parse it -> return None
+    if !base_info.path.exists() {
+        return Ok(None);
+    }
+
+    // Parse the top-level dllpack file
+    let base_file = DllPackFile::from_file(&base_info.path)
+        .map_err(|e| anyhow!("Failed to parse the main dllpack file: {}", e))?;
+
+    // Prepare a result structure
+    let mut result = CachedDependencyResult {
+        manifest_path: base_info.path.clone(),
+        dependencies: Vec::new(),
+    };
+
+    // We'll do a BFS (or DFS) to traverse all dependent dllpacks across all platforms,
+    // but only for those that are already cached.
+    let mut visited_manifests = BTreeSet::new();
+    let mut queue = VecDeque::new();
+
+    // Enqueue the top-level file
+    visited_manifests.insert(base_info.clone());
+    queue.push_back(base_file);
+
+    while let Some(current_file) = queue.pop_front() {
+        // For each platform in the current dllpack, gather dependencies
+        for (_platform_name, p_manifest) in &current_file.manifest.platforms {
+            for dep in &p_manifest.dependencies {
+                match dep {
+                    // If the dependency is another dllpack, check if it's cached
+                    Dependency::DllPack { url } => {
+                        let sub_info = ManifestInfo::from_input(url, work_dir)?;
+
+                        // If we haven't visited this sub-manifest yet and it's cached locally
+                        if !visited_manifests.contains(&sub_info) && sub_info.path.exists() {
+                            // Parse it
+                            let sub_file = DllPackFile::from_file(&sub_info.path).map_err(|e| {
+                                anyhow!("Failed to parse a dependent dllpack file: {}", e)
+                            })?;
+                            // Record it in the dependency list
+                            result
+                                .dependencies
+                                .push((url.to_string(), sub_info.path.clone()));
+                            // Mark as visited and enqueue
+                            visited_manifests.insert(sub_info);
+                            queue.push_back(sub_file);
+                        }
+                    }
+                    // If the dependency is a direct Dll
+                    Dependency::RawLib { url, .. } => {
+                        let dll_info = DllInfo::from_input(url, &None, work_dir)?;
+                        // If it's actually present, record it
+                        if dll_info.path.exists() {
+                            result
+                                .dependencies
+                                .push((url.to_string(), dll_info.path.clone()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If we reach here, we did find and parse the main dllpack, so return Some(...)
+    Ok(Some(result))
 }
 
 #[cfg(test)]

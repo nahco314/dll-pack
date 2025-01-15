@@ -1,11 +1,17 @@
 use crate::resolve::{resolve, ResolveError};
 use crate::type_utils::{Caller, IOToFn};
 use anyhow::{anyhow, Result};
+#[cfg(unix)]
 use libloading::os::unix::{
     Library as LLNativeLibrary, // LL means libloading
     Symbol,
     RTLD_LOCAL,
     RTLD_NOW,
+};
+#[cfg(windows)]
+use libloading::os::windows::{
+    Library as LLNativeLibrary, // LL means libloading
+    Symbol,
 };
 use log::{debug, trace};
 use std::fs;

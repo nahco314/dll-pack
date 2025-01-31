@@ -19,7 +19,12 @@ pub struct DllInfo {
 
 impl DllInfo {
     pub fn new(url: Url, name: String, path: PathBuf, cache_dir: Option<PathBuf>) -> Self {
-        Self { url, name, path, cache_dir }
+        Self {
+            url,
+            name,
+            path,
+            cache_dir,
+        }
     }
 
     pub fn from_input(url: &Url, name: &Option<&str>, dir_path: &PathBuf) -> Result<Self> {
@@ -31,9 +36,14 @@ impl DllInfo {
             .ok_or(anyhow!("Could not get file name"))?;
 
         let cache_dir = dir_path.join(e_url.to_string());
-        let path =cache_dir.join(name);
+        let path = cache_dir.join(name);
 
-        Ok(Self::new(url.clone(), name.to_string(), path, Some(cache_dir)))
+        Ok(Self::new(
+            url.clone(),
+            name.to_string(),
+            path,
+            Some(cache_dir),
+        ))
     }
 
     pub fn wasm_module_cache_path(&self) -> PathBuf {

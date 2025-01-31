@@ -1,3 +1,4 @@
+use crate::fs_utils::get_available_drives;
 use crate::resolve::{resolve, ResolveError};
 use crate::type_utils::{Caller, IOToFn};
 use anyhow::{anyhow, Result};
@@ -13,10 +14,12 @@ use libloading::os::windows::{
     Library as LLNativeLibrary, // LL means libloading
     Symbol,
 };
-use log::{debug, trace};
+use log::{debug, info, trace};
+use std::fmt::format;
 use std::fs;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
 use wasmtime::{Config, Engine, Instance as WasmInstance, Linker, Module, Store, TypedFunc};
 use wasmtime_wasi::preview1::WasiP1Ctx;
@@ -128,6 +131,29 @@ fn is_wasi(platform: &str) -> bool {
     platform.contains("wasi")
 }
 
+#[cfg(unix)]
+fn pre_open_all(wasi_ctx_builder: &mut WasiCtxBuilder) -> Result<()> {
+    wasi_ctx_builder.preopened_dir("/", "/", DirPerms::all(), FilePerms::all())?;
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn pre_open_all(wasi_ctx_builder: &mut WasiCtxBuilder) -> Result<()> {
+    // Note that it cannot handle, for example, drives connected after the context has been created.
+    // Some alternative solution is needed for this.
+    for drive in get_available_drives() {
+        wasi_ctx_builder.preopened_dir(
+            format!("{}:\\", drive.to_uppercase()),
+            format!("/{}", drive.to_lowercase()),
+            DirPerms::all(),
+            FilePerms::all(),
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Loads a wasm library with WASI support, including module caching for performance.
 pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<Library> {
     debug!("toplevel-load with {}: {}", platform, url);
@@ -196,11 +222,14 @@ pub fn load_with_wasm(url: &Url, work_dir: &PathBuf, platform: &str) -> Result<L
     preview1::add_to_linker_sync(&mut linker, |t| t)?;
     let pre = linker.instantiate_pre(&module)?;
 
-    let wasi_ctx = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .inherit_env()
-        .preopened_dir("/", "/", DirPerms::all(), FilePerms::all())?
-        .build_p1();
+    let mut wasi_ctx_builder = WasiCtxBuilder::new();
+
+    wasi_ctx_builder.inherit_env();
+    wasi_ctx_builder.inherit_stdio();
+
+    pre_open_all(&mut wasi_ctx_builder)?;
+
+    let wasi_ctx = wasi_ctx_builder.build_p1();
 
     let mut store = Store::new(&engine, wasi_ctx);
     let instance = pre.instantiate(&mut store)?;

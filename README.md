@@ -6,9 +6,4 @@ This toolchain has been built for the tool called “foro”, and documents, lic
 
 ## platforms
 
-- linux: fully supported
-- macos: supported
-  - Basically functional, but with some inadequate features
-- Windows: You can use WASM module, native is WIP
-  - loading logic may work with some modification.
-  - building tools need to be created.
+linux, macos, and windows are all supported.

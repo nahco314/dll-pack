@@ -190,29 +190,19 @@ pub fn resolve(
     Ok((dll_info, dependency_load_order_paths))
 }
 
-/// Holds the location of the main dllpack manifest, and all cached dependencies found.
-/// This is analogous to (PathBuf, Vec<(String, PathBuf)>).
-#[derive(Debug)]
-pub struct CachedDependencyResult {
-    /// The path to the top-level dllpack manifest in the local cache.
-    pub manifest_path: PathBuf,
-    /// A list of dependencies found, each paired with their cached path (if present).
-    pub dependencies: Vec<(String, PathBuf)>,
-}
-
 /// Gathers all locally cached dependencies (DllPacks and Dlls) for **all platforms**
 /// of the given dllpack, without triggering any downloads.
 /// If the main dllpack is not cached locally, it returns `Ok(None)`.
 ///
 /// # Returns
-/// * `Ok(Some(CachedDependencyResult))` if the top-level manifest is found and parsed successfully,
-///   and any dependencies that are also cached are collected.
-/// * `Ok(None)` if the top-level dllpack manifest is not found in the local cache.
-/// * `Err(...)` if some I/O or parsing error occurs.
+/// * `Ok(Some(Vec<(String, PathBuf)>))` If a cache exists.
+///    A Vec of tuple (url of data, cached path) is returned if the data to be erased exists in the cache.
+/// * `Ok(None)` If the top-level dllpack manifest is not found in the local cache.
+/// * `Err(...)` If some I/O or parsing error occurs.
 pub fn get_all_cached_dependencies(
     dllpack_url: &Url,
     work_dir: &PathBuf,
-) -> Result<Option<CachedDependencyResult>> {
+) -> Result<Option<Vec<(String, PathBuf)>>> {
     // Build a ManifestInfo for the top-level URL
     let base_info = ManifestInfo::from_input(dllpack_url, work_dir)?;
 
@@ -226,10 +216,9 @@ pub fn get_all_cached_dependencies(
         .map_err(|e| anyhow!("Failed to parse the main dllpack file: {}", e))?;
 
     // Prepare a result structure
-    let mut result = CachedDependencyResult {
-        manifest_path: base_info.path.clone(),
-        dependencies: Vec::new(),
-    };
+    let mut result = vec![(base_info.url.to_string(), base_info.path.clone())];
+
+    debug!("aa {:?}", base_file);
 
     // We'll do a BFS (or DFS) to traverse all dependent dllpacks across all platforms,
     // but only for those that are already cached.
@@ -243,6 +232,12 @@ pub fn get_all_cached_dependencies(
     while let Some(current_file) = queue.pop_front() {
         // For each platform in the current dllpack, gather dependencies
         for (_platform_name, p_manifest) in &current_file.manifest.platforms {
+            let dll_info =
+                DllInfo::from_input(&p_manifest.url, &p_manifest.name.as_deref(), work_dir)?;
+            if let Some(p) = dll_info.exist_cache_dir() {
+                result.push((dll_info.url.to_string(), p));
+            }
+
             for dep in &p_manifest.dependencies {
                 match dep {
                     // If the dependency is another dllpack, check if it's cached
@@ -256,22 +251,18 @@ pub fn get_all_cached_dependencies(
                                 anyhow!("Failed to parse a dependent dllpack file: {}", e)
                             })?;
                             // Record it in the dependency list
-                            result
-                                .dependencies
-                                .push((url.to_string(), sub_info.path.clone()));
+                            result.push((url.to_string(), sub_info.path.clone()));
                             // Mark as visited and enqueue
                             visited_manifests.insert(sub_info);
                             queue.push_back(sub_file);
                         }
                     }
                     // If the dependency is a direct Dll
-                    Dependency::RawLib { url, .. } => {
-                        let dll_info = DllInfo::from_input(url, &None, work_dir)?;
+                    Dependency::RawLib { url, name } => {
+                        let dll_info = DllInfo::from_input(url, &name.as_deref(), work_dir)?;
                         // If it's actually present, record it
-                        if dll_info.path.exists() {
-                            result
-                                .dependencies
-                                .push((url.to_string(), dll_info.path.clone()));
+                        if let Some(p) = dll_info.exist_cache_dir() {
+                            result.push((dll_info.url.to_string(), p));
                         }
                     }
                 }

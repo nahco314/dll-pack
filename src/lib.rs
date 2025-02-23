@@ -18,6 +18,7 @@ use wasmtime::IntoFunc;
 pub mod dependency; // Dependency management and resolution
 pub mod dllpack_file; // DLLPack file format handling
 mod download; // Internal module for downloading libraries
+mod fs_utils; // Internal file system utilities
 pub mod load; // Core library loading functionality
 pub mod process_cache_multi; // Multiprocess caching of loaded libraries
 pub mod process_cache_single; // Process-level caching of loaded libraries
